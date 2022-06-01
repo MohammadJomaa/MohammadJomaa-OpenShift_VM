@@ -1,2 +1,2 @@
 FROM scratch
-ADD WindowsServer2016.qcow2 /disk/
+ADD winserver2016.qcow2 /disk/
