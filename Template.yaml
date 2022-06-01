@@ -1,0 +1,463 @@
+apiVersion: template.openshift.io/v1
+kind: Template
+message: Your admin credentials are
+metadata:
+  annotations:
+    description: "An example is application with a Oracle database. For more
+      information about using this template, including OpenShift considerations, see
+      https://www.nvssoft.com/ .\nWARNING: Any data stored will be lost upon pod destruction.
+      Only use this template for testing.\" "
+    iconClass: icon-windows
+    openshift.io/display-name: App (Ephemeral)
+    openshift.io/documentation-url: https://www.nvssoft.com/
+    openshift.io/long-description: 'This template defines resources needed to develop
+      a myapp application, including a build configuration, application DeploymentConfig,
+      and database DeploymentConfig.  The database is stored in non-persistent storage,
+      so this configuration should be used for experimental purposes only. '
+    openshift.io/provider-display-name: NVSsoft, Inc.
+    openshift.io/support-url: https://www.nvssoft.com/
+  creationTimestamp: "2022-04-26T06:40:32Z"
+  name: myapptemplate
+  resourceVersion: "1251861"
+  uid: 121dfdf8-965d-49ac-8743-43cfe1c933b6
+objects:
+- apiVersion: v1
+  data:
+    ENABLE_ARCHIVELOG: "false"
+    ORACLE_CHARACTERSET: AL32UTF8
+    ORACLE_EDITION: enterprise
+    ORACLE_PDB: ORCLPDB1
+    ORACLE_PWD: myapp1
+    ORACLE_SID: myapp
+    INIT_SGA_SIZE: "2048"
+    INIT_PGA_SIZE: "2048"
+  kind: ConfigMap
+  metadata:
+    labels:
+      app: ${{APP_NAME}}
+    name: ${APP_NAME}oradb   
+- apiVersion: apps/v1
+  kind: StatefulSet
+  metadata:
+    name: ${APP_NAME}oradb     
+    labels:
+      app: ${APP_NAME}
+      version: 21.3.0
+  spec:
+    serviceName: "${APP_NAME}oradb"
+    replicas: 1
+    selector:
+      matchLabels:
+        name: ${APP_NAME}database
+        version: 21.3.0
+    template:
+      metadata:
+        name: ${APP_NAME}oradb
+        labels:
+          name: ${APP_NAME}database       
+          app: ${APP_NAME}
+          version: 21.3.0
+      spec:
+        securityContext:
+          fsGroup: 54321
+        volumes:
+           - name: dshm
+             emptyDir:
+               medium: Memory
+        containers:
+          - name: oradb
+            resources:
+              limits:
+                memory: ${MEMdbhost}Gi
+                cpu: ${{CPUsdbhost}}
+            image: 10.1.0.4:5000/database/enterprise:latest
+            imagePullPolicy: IfNotPresent
+            ports:
+              - name: listener
+                containerPort: 1521
+              - name: oemexpress
+                containerPort: 5500
+            volumeMounts:
+              - name: dshm
+                mountPath: "/dev/shm"
+              - name: ${APP_NAME}ora-data193
+                mountPath: "/opt/oracle/oradata"
+           #    - name: ${APP_NAME}ora-setup193
+           #     mountPath: "/opt/oracle/scripts/setup"
+           #  - name: ${APP_NAME}ora-startup193
+           #   mountPath: "/opt/oracle/scripts/startup"
+            env:
+              - name: ORACLE_SID
+                valueFrom:
+                  configMapKeyRef:
+                    name: ${APP_NAME}oradb #Read from a configmap called oradb
+                    key: ORACLE_SID #Read the key call ORACLE_SID
+              - name: ORACLE_PDB
+                valueFrom:
+                  configMapKeyRef:
+                    name: ${APP_NAME}oradb #Read from a configmap called oradb
+                    key: ORACLE_PDB #Read the key call ORACLE_PDB
+              - name: ORACLE_PWD
+                valueFrom:
+                  configMapKeyRef:
+                    name: ${APP_NAME}oradb #Read from a configmap called oradb
+                    key: ORACLE_PWD #Read the key call ORACLE_PWD
+              - name: ENABLE_ARCHIVELOG
+                valueFrom:
+                  configMapKeyRef:
+                    name: ${APP_NAME}oradb #Read from a configmap called oradb
+                    key: ENABLE_ARCHIVELOG #Read the key call ENABLE_ARCHIVELOG
+              - name: ORACLE_CHARACTERSET
+                valueFrom:
+                  configMapKeyRef:
+                    name: ${APP_NAME}oradb #Read from a configmap called oradb
+                    key: ORACLE_CHARACTERSET #Read the key call ORACLE_CHARACTERSET
+              - name: ORACLE_EDITION
+                valueFrom:
+                  configMapKeyRef:
+                    name: ${APP_NAME}oradb #Read from a configmap called oradb
+                    key: ORACLE_EDITION #Read the key call ORACLE_EDITION
+              - name: INIT_PGA_SIZE
+                valueFrom:
+                  configMapKeyRef:
+                    name: ${APP_NAME}oradb 
+                    key: INIT_PGA_SIZE      
+              - name: INIT_SGA_SIZE
+                valueFrom:
+                  configMapKeyRef:
+                    name: ${APP_NAME}oradb 
+                    key: INIT_SGA_SIZE     
+    volumeClaimTemplates:
+    - metadata:
+        name: ${APP_NAME}ora-data193
+      spec:
+        storageClassName: default
+        accessModes:
+        - ReadWriteOnce
+        resources:
+          requests:
+            storage: 20Gi
+- apiVersion: v1
+  kind: Service
+  metadata:
+    name: ${APP_NAME}oradb  
+    labels:
+      app: ${APP_NAME} 
+      name: ${APP_NAME}database
+      version: 21.3.0
+  spec:
+    selector:
+      name: ${APP_NAME}database
+      version: 21.3.0
+    type: NodePort
+    ports:
+    - name: listener
+      protocol: TCP
+      port: 1521
+      targetPort: 1521
+    - name: oemexpress
+      protocol: TCP
+      port: 5500
+      targetPort: 5500 
+- apiVersion: autoscaling/v1
+  kind: HorizontalPodAutoscaler
+  metadata:
+    name: ${APP_NAME}hpaoracle
+     
+    labels:
+      app: ${APP_NAME}    
+  spec:
+    scaleTargetRef:
+      kind: StatefulSet
+      name: ${APP_NAME}oradb 
+      apiVersion: apps/v1
+    minReplicas: ${{minReplicasdb}}
+    maxReplicas: ${{maxReplicasdb}}
+    targetCPUUtilizationPercentage: ${{targetCPUUtilizationPercentagedb}}    
+- apiVersion: v1
+  data:
+    TNS_Name: "ORCL"
+    TNS_File: 'C:\WINDOWS.X64_193000_client_home\network\admin\tnsnames.ora'
+    TNS_Protocol: "TCP"
+    TNS_Hostname: "${APP_NAME}oradb.${Namespace}.svc.cluster.local"
+    TNS_Port: "1521"
+    TNS_Sid: "ORCLPDB1"
+  kind: ConfigMap
+  metadata:
+    name: tnsnameconfig   
+    labels:
+      app: ${{APP_NAME}}
+- apiVersion: cdi.kubevirt.io/v1beta1 
+  kind: DataVolume
+  metadata:
+    labels:
+      app: ${APP_NAME}
+    name: ${APP_NAME}share-datavolume
+  spec:
+    source:
+        blank: {}
+    pvc:
+      # Optional: Set the storage class or omit to accept the default
+      # storageClassName: "hostpath"
+      storageClassName: "default"
+      namespace: ${{Namespace}}
+      accessModes:
+        - ReadWriteMany
+      resources:
+        requests:
+          storage: 100Gi    
+- apiVersion: kubevirt.io/v1alpha3
+  kind: VirtualMachineInstanceReplicaSet
+  metadata:
+    annotations:
+      flavor.template.kubevirt.io/Large: "true"
+      kubemacpool.io/transaction-timestamp: "2022-04-25T06:31:29.995753204Z"
+      kubevirt.io/latest-observed-api-version: v1
+      kubevirt.io/storage-observed-api-version: v1alpha3
+      name.os.template.kubevirt.io/win2k16: Microsoft Windows Server 2016
+      vm.kubevirt.io/validations: |
+        [
+          {
+            "name": "minimal-required-memory",
+            "path": "jsonpath::.spec.domain.resources.requests.memory",
+            "rule": "integer",
+            "message": "This VM requires more memory.",
+            "min": 536870912
+          }, {
+            "name": "windows-virtio-bus",
+            "path": "jsonpath::.spec.domain.devices.disks[*].disk.bus",
+            "valid": "jsonpath::.spec.domain.devices.disks[*].disk.bus",
+            "rule": "enum",
+            "message": "virto disk bus type has better performance, install virtio drivers in VM and change bus type",
+            "values": ["virtio"],
+            "justWarning": true
+          }, {
+            "name": "windows-disk-bus",
+            "path": "jsonpath::.spec.domain.devices.disks[*].disk.bus",
+            "valid": "jsonpath::.spec.domain.devices.disks[*].disk.bus",
+            "rule": "enum",
+            "message": "disk bus has to be either virtio or sata or scsi",
+            "values": ["virtio", "sata", "scsi"]
+          }, {
+            "name": "windows-cd-bus",
+            "path": "jsonpath::.spec.domain.devices.disks[*].cdrom.bus",
+            "valid": "jsonpath::.spec.domain.devices.disks[*].cdrom.bus",
+            "rule": "enum",
+            "message": "cd bus has to be sata",
+            "values": ["sata"]
+          }
+        ]
+    labels:
+      app: ${{APP_NAME}}
+      os.template.kubevirt.io/win2k16: "true"
+      vm.kubevirt.io/template: windows2k16-server-large
+      vm.kubevirt.io/template.revision: "1"
+      vm.kubevirt.io/template.version: v0.16.4
+      workload.template.kubevirt.io/server: "true"
+    name: ${APP_NAME}vm
+  spec:
+    replicas: 1
+    selector:
+      matchLabels:
+        name: ${APP_NAME}vm  
+    running: false
+    template:
+      metadata:
+        annotations:
+          vm.kubevirt.io/flavor: Large
+          vm.kubevirt.io/os: windows2k16
+        creationTimestamp: null
+        labels:
+          name : ${APP_NAME}vm
+          flavor.template.kubevirt.io/Large: "true"
+          kubevirt.io/domain: ${domain}
+          kubevirt.io/size: custom
+          os.template.kubevirt.io/win2k16: "true"
+          vm.kubevirt.io/name: ${APP_NAME}
+          workload.template.kubevirt.io/server: "true"
+      spec:
+        domain:
+          clock:
+            timezone: "Asia/Damascus"
+            timer:
+              hpet:
+                present: false
+              hyperv: {}
+              pit:
+                tickPolicy: delay
+              rtc:
+                tickPolicy: catchup
+            utc: {}
+          devices:
+            disks:
+            - disk:
+              name: containerdisk           
+            - cdrom:
+                bus: sata
+              name: tnsnameconfig 
+            - cdrom:
+                bus: sata
+              name: myappconfig             
+            inputs:
+            - bus: usb
+              name: tablet
+              type: tablet
+            interfaces:
+            - masquerade: {}
+              model: e1000e
+              name: default 
+          features:
+            acpi: {}
+            apic: {}
+            hyperv:
+              frequencies: {}
+              ipi: {}
+              reenlightenment: {}
+              relaxed: {}
+              reset: {}
+              runtime: {}
+              spinlocks:
+                spinlocks: 8191
+              synic: {}
+              synictimer:
+                direct: {}
+              tlbflush: {}
+              vapic: {}
+              vpindex: {}
+          machine:
+            type: pc-q35-rhel8.4.0
+          resources:
+              limits:
+                cpu: ${{CPUs}}
+                memory: ${MEM}Gi  
+          firmware:
+             # this sets the bootloader type
+            bootloader:
+              efi:
+                secureBoot: false     
+        evictionStrategy: LiveMigrate
+        hostname: ${APP_NAME}
+        networks:
+        - name: default
+          pod: {}
+        terminationGracePeriodSeconds: 3600
+        volumes:
+        - name: containerdisk
+          containerDisk:
+            image: 10.1.0.4:5000/winserver2016
+        - configMap:
+            name: tnsnameconfig
+          name: tnsnameconfig  
+        - configMap:
+            name: myappconfig
+          name: myappconfig   
+- apiVersion: autoscaling/v1
+  kind: HorizontalPodAutoscaler
+  metadata:
+    name: ${APP_NAME}hpa
+     
+    labels:
+      app: ${APP_NAME}    
+  spec:
+    scaleTargetRef:
+      kind: VirtualMachineInstanceReplicaSet
+      name: ${APP_NAME}vm
+      apiVersion: kubevirt.io/v1alpha3
+    minReplicas: ${{minReplicas}}
+    maxReplicas: ${{maxReplicas}}
+    targetCPUUtilizationPercentage: ${{targetCPUUtilizationPercentage}}
+- apiVersion: v1
+  kind: Service
+  metadata:
+    name: ${APP_NAME}webservice
+  spec:
+    ports:
+    - name: myappvmport
+      port: 80
+      protocol: TCP
+      targetPort: 80
+    selector:
+      name : ${APP_NAME}vm
+    type: NodePort  
+- apiVersion: route.openshift.io/v1
+  kind: Route
+  metadata:
+    annotations:
+      openshift.io/host.generated: "true"
+    labels:
+      template.openshift.io/template-instance-owner: e9a57aa7-55b6-4fb6-a9a0-1887ca85d7ca
+      app: ${APP_NAME} 
+    name: ${APP_NAME}route   
+  spec:
+    host: ${APP_NAME}-${Namespace}.apps-crc.testing
+    #path: /myappSite
+    port:
+      targetPort: myappvmport
+    to:
+      kind: Service
+      name: ${APP_NAME}webservice
+      weight: 100
+    wildcardPolicy: None   
+parameters:
+- description: Set your namespace name
+  displayName: Namespace
+  name: Namespace
+  required: true
+  value: myapp
+- description: Set your application name
+  displayName: myapp name
+  name: APP_NAME
+  required: true
+  value: myapp
+- description: Domain
+  displayName: Domain
+  name: domain
+  value: myapp
+- description: CPUs of myapp VM
+  name: CPUs
+  required: true
+  value: "2"
+- description: MEM of myapp VM
+  name: MEM
+  required: true
+  value: "6"
+- description: Max Replicas of myapp VM
+  displayName: Max Replicas
+  name: maxReplicas
+  required: true
+  value: "1"
+- description: Min Replicas of myapp VM
+  displayName: Min Replicas
+  name: minReplicas
+  required: true
+  value: "1"  
+- description: Target CPU Utilizati on Percentage for scale myapp VM
+  name: targetCPUUtilizationPercentage
+  displayName: Target CPU Utilizati on Percentage
+  required: true
+  value: "50"   
+- description: CPUs of myapp DB host
+  name: CPUsdbhost
+  required: true
+  value: "2"
+- description: MEM of myapp DB host
+  name: MEMdbhost
+  required: true
+  value: "8"
+- description: Max Replicas of myapp DB
+  displayName: Max Replicas DB
+  name: maxReplicasdb
+  required: true
+  value: "1"
+- description: Min Replicas of myapp DB
+  displayName: Min Replicas DB
+  name: minReplicasdb
+  required: true
+  value: "1"  
+- description: Target CPU Utilizati on Percentage for scale myapp DB
+  name: targetCPUUtilizationPercentagedb
+  displayName: Target CPU Utilizati on Percentage (DB)
+  required: true
+  value: "80"  
+
+  
