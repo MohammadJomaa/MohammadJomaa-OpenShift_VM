@@ -294,10 +294,7 @@ objects:
               name: containerdisk           
             - cdrom:
                 bus: sata
-              name: tnsnameconfig 
-            - cdrom:
-                bus: sata
-              name: myappconfig             
+              name: tnsnameconfig            
             inputs:
             - bus: usb
               name: tablet
@@ -348,9 +345,6 @@ objects:
         - configMap:
             name: tnsnameconfig
           name: tnsnameconfig  
-        - configMap:
-            name: myappconfig
-          name: myappconfig   
 - apiVersion: autoscaling/v1
   kind: HorizontalPodAutoscaler
   metadata:
