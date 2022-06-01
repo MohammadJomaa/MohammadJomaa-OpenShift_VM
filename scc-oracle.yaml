@@ -1,0 +1,18 @@
+kind: SecurityContextConstraints
+  apiVersion: security.openshift.io/v1
+  metadata:
+    name: scc-oracle
+  allowHostDirVolumePlugin: true
+  allowHostPorts: true
+  allowPrivilegeEscalation: true
+  allowPrivilegedContainer: true
+  runAsUser:
+    type: RunAsAny
+  seLinuxContext:
+    type: RunAsAny
+  fsGroup:
+    type: RunAsAny
+  supplementalGroups:
+    type: RunAsAny
+  groups:
+  - system:authenticated  
