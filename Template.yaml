@@ -9,13 +9,10 @@ metadata:
       Only use this template for testing.\" "
     iconClass: icon-windows
     openshift.io/display-name: App (Ephemeral)
-    openshift.io/documentation-url: https://www.nvssoft.com/
     openshift.io/long-description: 'This template defines resources needed to develop
       a myapp application, including a build configuration, application DeploymentConfig,
       and database DeploymentConfig.  The database is stored in non-persistent storage,
       so this configuration should be used for experimental purposes only. '
-    openshift.io/provider-display-name: NVSsoft, Inc.
-    openshift.io/support-url: https://www.nvssoft.com/
   creationTimestamp: "2022-04-26T06:40:32Z"
   name: myapptemplate
   resourceVersion: "1251861"
